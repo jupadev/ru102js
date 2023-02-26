@@ -1,7 +1,7 @@
-const redis = require('./redis_client');
+const redis = require("./redis_client");
 /* eslint-disable no-unused-vars */
-const keyGenerator = require('./redis_key_generator');
-const timeUtils = require('../../../utils/time_utils');
+const keyGenerator = require("./redis_key_generator");
+const timeUtils = require("../../../utils/time_utils");
 /* eslint-enable */
 
 /* eslint-disable no-unused-vars */
@@ -11,7 +11,24 @@ const hitSlidingWindow = async (name, opts) => {
   const client = redis.getClient();
 
   // START Challenge #7
-  return -2;
+  const key = keyGenerator.getKey(
+    `limiter:${opts.interval}:${name}:${opts.maxHits}`
+  );
+  const now = timeUtils.getCurrentTimestampMillis();
+  const memberId = `${now}-${Math.random()}`;
+
+  const transaction = client.multi();
+
+  transaction.zadd(key, now, memberId);
+  // will remove the values that doesnt fit in the interval
+  transaction.zremrangebyscore(key, 0, now - opts.interval);
+  // count the number of entries
+  transaction.zcard(key);
+
+  const response = await transaction.execAsync();
+  const hits = parseInt(response[2], 10);
+
+  return hits > opts.maxHits ? -1 : opts.maxHits - hits;
   // END Challenge #7
 };
 
